@@ -1,36 +1,76 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Polling App (Next.js + Supabase + Vercel)
 
-## Getting Started
+A full‑stack polling application. Creators build polls; participants vote with live updates; sharing via short links and QR codes.
 
-First, run the development server:
+### Tech Stack
+
+- Next.js App Router (React 19, TypeScript, TailwindCSS, shadcn/ui)
+- Supabase (Auth, Postgres, RLS, Realtime, Storage)
+- Vercel (serverless/edge, CDN)
+
+### Current Stage
+
+- Project scaffolded with App Router and base folders
+- Architecture and backlog defined: see `context.md` and `backlog.md`
+- API route groups present (`app/api/polls`, `app/api/votes`)
+- UI scaffolding present (`app/(auth)`, `(dashboard)`, `(public)`)
+
+### Up Next (Roadmap)
+
+High‑level from `backlog.md`:
+
+- Supabase schema: `profiles`, `polls`, `poll_options`, `votes`, counts and RLS
+- Email/password auth flow with Supabase
+- Poll creation and listing for creators
+- Public poll page with voting and realtime updates
+- QR code generation for sharing
+
+### Getting Started (Dev)
+
+1. Install deps and run dev server:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Environment variables (`.env.local`):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` (server‑only)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. Optional local Supabase (for DX): see Supabase CLI docs.
 
-## Learn More
+### Scripts
 
-To learn more about Next.js, take a look at the following resources:
+- `npm run dev` – start local dev server
+- `npm run build` – production build
+- `npm run start` – start production server locally
+- `npm run lint` – run ESLint
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Repository Structure (abridged)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+app/
+  (auth)/ (dashboard)/ (public)/
+  api/
+    polls/ votes/
+components/
+lib/
+  supabase/ types/ hooks/ utils/
+public/
+```
 
-## Deploy on Vercel
+### Documentation
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Context for AI/contributors: `context.md`
+- Feature backlog and acceptance criteria: `backlog.md`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Deployment
+
+- Target: Vercel. Configure environment variables per project environment.
+
+### Status & Contributions
+
+This project is under active development. See `backlog.md` for current sprint tasks and priorities. Contributions are welcome via issues and PRs aligned with the backlog.
