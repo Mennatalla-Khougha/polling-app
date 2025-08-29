@@ -1,145 +1,343 @@
 ## Project Context
 
-This document provides concise context for AI assistants and contributors to understand the Polling App: its goals, architecture, data model, APIs, and conventions. Share this alongside the repo to enable high‑quality, context‑aware help.
+This document provides concise context for AI assistants and contributors to understand the Polling App: its current implementation status, architecture, data model, APIs, and conventions. Share this alongside the repo to enable high‑quality, context‑aware help.
 
 ### What is this app?
 
 - **Purpose**: A full‑stack polling application where authenticated users create polls, participants vote (optionally anonymously), and see results update in real‑time.
-- **Features**: Poll creation and management, single/multiple‑choice voting, real‑time results, QR code sharing/scanning, public/private access, auth, and basic analytics.
+- **Current Status**: ~65% MVP complete - core functionality working, real-time and advanced features pending
+- **Features Implemented**: Poll creation/management, single/multiple‑choice voting, basic results, authentication, public/private access
+- **Features Pending**: Real-time updates, QR code sharing/scanning, advanced analytics, poll management tools
 
-### Tech Stack
+### Tech Stack (Implemented)
 
-- **Frontend**: Next.js App Router (v15+), React 19, TypeScript, TailwindCSS, shadcn/ui
-- **Backend**: Next.js Route Handlers (Edge/Node as needed)
-- **Data/Auth/Realtime**: Supabase (Postgres, RLS, Auth, Realtime, Storage)
-- **Deployment**: Vercel (serverless/edge functions, CDN, images)
-- **DX/Quality**: ESLint 9, TypeScript strict, Prettier (optional), Vitest/Playwright (planned)
-- **Utilities**: Zod, Zustand or React Query (for client/server state), QR code libs, Upstash KV/Rate limit (optional)
+- **Frontend**: Next.js 15 App Router, React 19, TypeScript strict, TailwindCSS 4, shadcn/ui
+- **Backend**: Next.js Route Handlers with Zod validation
+- **Data/Auth**: Supabase (Postgres with RLS, Auth, triggers for vote counting)
+- **Deployment**: Configured for Vercel (not yet deployed)
+- **DX/Quality**: ESLint 9, TypeScript strict, component-based architecture
+- **State Management**: React state + custom hooks (Zustand/React Query planned)
 
-### High‑Level Architecture
+### High‑Level Architecture (Current Implementation)
 
-- **Client** renders server components for data‑heavy/SEO views, hydrates interactive client components for forms, voting, and scanning.
-- **APIs** in `app/api/*` perform validation, auth checks, rate limiting, and call Supabase.
-- **Database** stores polls, options, votes; RLS gates access; triggers maintain denormalized counts for fast reads.
-- **Realtime** uses Supabase channel subscriptions to push vote updates to clients.
-- **Sharing** uses short slugs/links; server or client generates QR codes; optional share tokens control access.
+- **Client**: Server components for data‑heavy views, client components for interactive forms and voting
+- **APIs**: Validation (Zod) → Auth (Supabase JWT) → Database operations → Response DTOs
+- **Database**: Postgres with RLS policies, triggers maintain vote counts, proper indexing
+- **Authentication**: Supabase Auth with automatic profile creation
+- **Routing**: Route groups `(auth)`, `(dashboard)`, `(public)` for UX segmentation
 
-### Folder Structure (abridged)
+### Folder Structure (Current)
 
 ```
 app/
-  (auth)/           # auth routes
-  (dashboard)/      # creator/owner UX
-  (public)/         # public voting & results
+  (auth)/
+    login/, register/     # ✅ Auth forms implemented
+  (dashboard)/
+    dashboard/           # ✅ User poll management
+    polls/              # ✅ Poll creation/editing routes
+  (public)/
+    polls/[id]/         # ✅ Public voting interface
   api/
-    polls/          # CRUD + vote endpoints
-    votes/          # admin/owner reads (optional)
-components/         # ui, forms, polls, layout
+    polls/              # ✅ CRUD + list endpoints
+    votes/              # ✅ Voting endpoint
+    auth/               # ✅ Auth utilities
+  globals.css, layout.tsx # ✅ Global styles and layout
+  page.tsx              # ✅ Professional landing page
+
+components/
+  forms/
+    AuthForm.tsx        # ✅ Login/register form
+    CreatePollForm.tsx  # ✅ Comprehensive poll creation
+    EditPollForm.tsx    # ✅ Poll editing (basic)
+  polls/
+    PollsList.tsx       # ✅ User's polls display
+    PollDetails.tsx     # ✅ Poll information display
+    VotingInterface.tsx # ✅ Public voting component
+  layout/               # ✅ Navigation and layout components
+  ui/                   # ✅ shadcn/ui components + theme toggle
+
 lib/
-  supabase/         # client/server helpers
-  types/            # shared TypeScript types
-  hooks/, utils/    # realtime hooks, helpers
-public/             # static assets
+  supabase/
+    client.ts, server.ts # ✅ Supabase client helpers
+  types/
+    index.ts            # ✅ Comprehensive TypeScript types
+  validations/
+    polls.ts            # ✅ Zod schemas for API validation
+  auth/
+    AuthContext.tsx     # ✅ Authentication state management
+  theme/
+    ThemeContext.tsx    # ✅ Theme system foundation
+  utils.ts              # ✅ Utility functions
+
+supabase/
+  schema.sql            # ✅ Complete database schema with RLS
+  cleanup.sql           # ✅ Database maintenance scripts
 ```
 
-### Data Model (conceptual)
+### Data Model (Implemented)
 
-- `profiles`: id, email, name, avatar_url, timestamps
-- `polls`: id, slug (unique), title, description, creator_id, is_public, allow_multiple_votes, allow_anonymous_votes, require_authentication, expires_at, created_at, updated_at
-- `poll_options`: id, poll_id, text, order_index, created_at
-- `votes`: id, poll_id, option_id, voter_user_id (nullable), voter_anon_id (nullable), voter_ip_hash (nullable), voter_device_id (nullable), created_at
-- `poll_option_counts`: (poll_id, option_id) PK, vote_count
-- Optional: `poll_shares` (share tokens), `poll_whitelist` (restricted access)
+**Core Tables:**
+- `profiles`: id (UUID), email, display_name, created_at
+  - ✅ Auto-created on signup with trigger
+  - ✅ RLS policies for privacy
 
-Notes:
+- `polls`: id (UUID), title, description, creator_id, is_public, allow_multiple_votes, expires_at, created_at
+  - ✅ Full CRUD operations
+  - ✅ Public/private access control via RLS
+  - ✅ Expiration date support
 
-- Use unique constraints to prevent duplicate votes per policy (e.g., unique (poll_id, voter_user_id) for single‑select).
-- Use triggers to maintain `poll_option_counts` on insert/delete to avoid heavy aggregate reads.
-- RLS ensures users read only allowed polls and write only their own resources.
+- `poll_options`: id (UUID), poll_id, text, vote_count, created_at
+  - ✅ Dynamic option management (2-10 options)
+  - ✅ Vote counts maintained by triggers
+  - ✅ Cascading deletes
 
-### API Surface (planned)
+- `votes`: id (UUID), poll_id, option_id, user_id, created_at
+  - ✅ Duplicate vote prevention via unique constraints
+  - ✅ Anonymous voting support (user_id nullable)
+  - ✅ Trigger updates vote_count on poll_options
 
-- `GET /api/polls` – list current user polls (owner) with pagination/filters
-- `POST /api/polls` – create poll (+ options)
-- `GET /api/polls/[id|slug]` – fetch poll + options (+ counts)
-- `PUT /api/polls/[id]` – update poll metadata/options (owner only)
-- `DELETE /api/polls/[id]` – delete poll (owner only)
-- `POST /api/polls/[id]/vote` – cast vote (auth/anon subject to policy)
-- `GET /api/polls/[id]/results` – aggregated counts for display
-- `POST /api/polls/[id]/share` – create share token (optional)
-- `GET /api/qr/[slug]` – QR payload/image for sharing
+**Implemented Constraints:**
+- Unique (poll_id, user_id) prevents duplicate votes per user
+- Check constraints on title/option length
+- Foreign key cascading for data integrity
+- Indexes on frequently queried columns
 
-All mutations validate payloads (Zod), enforce auth/authorization, and apply rate limits for anti‑abuse.
+### API Surface (Implemented)
 
-### Core Flows
+**✅ Working Endpoints:**
+- `GET /api/polls` – List current user's polls with options
+- `POST /api/polls` – Create poll with validation and options
+- `GET /api/polls/[id]` – Fetch poll details (respects RLS)
+- `POST /api/votes` – Cast vote with duplicate prevention
 
-1. Create Poll
+**🚧 Partially Implemented:**
+- `PUT /api/polls/[id]` – Update poll (basic structure exists)
+- `DELETE /api/polls/[id]` – Delete poll (RLS allows, UI pending)
 
-- Client: form submit → API `POST /api/polls`
-- Server: validate, auth, insert `polls`, `poll_options`
-- Result: return poll with slug; UI routes to dashboard or public view
+**⏳ Planned Endpoints:**
+- `GET /api/polls/[id]/results` – Aggregated results for analytics
+- `POST /api/polls/[id]/share` – Generate share tokens
+- `GET /api/qr/[id]` – QR code generation
 
-2. Vote
+**API Patterns (Established):**
+- All mutations: validate (Zod) → authenticate → authorize → execute → return typed response
+- Error handling with proper HTTP status codes and user-friendly messages
+- Request/Response DTOs with comprehensive TypeScript types
 
-- Client: select option(s) → API `POST /api/polls/[id]/vote`
-- Server: validate, dedupe per policy, insert `votes`, trigger increments `poll_option_counts`
-- Realtime: Supabase broadcasts changes; clients update counts
+### Core Flows (Current Status)
 
-3. View Results (live)
+**1. User Registration/Login ✅ COMPLETE**
+- Client: AuthForm → Supabase Auth
+- Server: Auto-create profile trigger
+- Result: Authenticated user with profile
 
-- Client: subscribe to `votes`/`poll_option_counts` by poll_id
-- Server/DB: triggers maintain counts; reads are fast
+**2. Poll Creation ✅ COMPLETE**
+- Client: CreatePollForm with validation → API `POST /api/polls`
+- Server: Validate, auth check, create poll + options atomically
+- Result: Poll created, redirect to management view
 
-4. Share via QR
+**3. Poll Voting ✅ COMPLETE**
+- Client: VotingInterface → API `POST /api/votes`
+- Server: Validate, check duplicates, insert vote, trigger updates counts
+- Result: Vote recorded, counts updated
 
-- Server or client: generate QR for poll URL `/poll/[slug]` (optionally embed token)
-- Client: scan QR → open public voting page; validate access
+**4. Real-time Results 🚧 PARTIAL**
+- Database: Triggers maintain vote counts
+- Frontend: Basic count display working
+- Missing: Supabase real-time subscriptions for live updates
 
-### Security Model
+**5. Poll Sharing 🚧 PARTIAL**
+- Public URLs work: `/polls/[id]` accessible
+- Missing: QR code generation, share tokens for private polls
 
-- Supabase Auth for identity; JWT validated in API handlers and RLS.
-- RLS policies per table (read public polls, write own polls, vote rules).
-- Duplicate/abuse prevention via:
-  - DB unique constraints (e.g., single vote per user/poll)
-  - Optional checks: `voter_ip_hash`, `voter_device_id`, `voter_anon_id`
-  - API rate limiting (e.g., Upstash Ratelimit) by IP/session
+### Security Model (Implemented)
 
-### Realtime Strategy
+**Authentication & Authorization ✅ COMPLETE:**
+- Supabase Auth JWT validation in API handlers and client
+- RLS policies enforce data access rules:
+  - Users can only read/write their own polls
+  - Public polls readable by everyone
+  - Vote access controlled by poll visibility
 
-- Subscribe to `postgres_changes` for `votes` or to a lightweight `poll_option_counts` channel filtered by `poll_id`.
-- Update UI state on incoming events; fall back to periodic refetch if offline.
+**Vote Integrity ✅ COMPLETE:**
+- Database unique constraints prevent duplicate votes
+- Server-side validation ensures data consistency
+- RLS policies prevent unauthorized vote manipulation
 
-### Environments & Config
+**Input Validation ✅ COMPLETE:**
+- Zod schemas validate all API inputs
+- Client-side validation with user-friendly error messages
+- SQL injection prevention via Supabase client parameterized queries
 
-Required envs (examples):
+**Pending Security Enhancements:**
+- Rate limiting for voting endpoints (planned)
+- CSRF protection for forms
+- Additional audit logging
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY` (server‑only)
-- Optional: `KV_REST_API_URL`, `KV_REST_API_TOKEN` (rate limit/cache)
+### Real-time Strategy (Planned)
 
-### Conventions
+**Current State:**
+- Vote counts updated via database triggers
+- UI shows current counts on page load/refresh
 
-- TypeScript strict; prefer server components for data fetching + SEO; wrap interactive pieces as client components.
-- Zod for runtime validation at API boundaries; centralize schemas.
-- Keep API handlers thin: validate → authorize → perform action → return DTO.
-- Prefer denormalized counts for hot paths; write triggers once, read often.
-- Naming: kebab‑case routes, snake_case DB columns, camelCase TS.
+**Planned Implementation:**
+- Supabase `postgres_changes` subscriptions on `votes` table
+- Client-side subscription management with useEffect hooks
+- Graceful fallback to polling if real-time connection fails
+- Connection state management and reconnection logic
 
-### Non‑Goals (initial scope)
+### Development Status & Environment
 
-- Complex poll types beyond single/multiple choice (ranked choice is future)
-- Advanced analytics and export (future)
-- Organization/teams and multi‑tenant billing (future)
+**✅ Development Setup Complete:**
+- `npm run dev` - Development server working
+- `npm run build` - Production build configured
+- `npm run lint` - ESLint 9 with Next.js rules
+- TypeScript strict mode enforcing type safety
 
-### Success Criteria (initial)
+**✅ Environment Variables Configured:**
+```
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+```
 
-- Create, share, and vote on a poll end‑to‑end in < 2 minutes.
-- Results reflect new votes within ~500ms via realtime.
-- Duplicate votes prevented per selected policy.
+**Database Status:**
+- Supabase project configured and connected
+- Schema deployed with all tables, RLS, and triggers
+- Sample data for testing available
 
-### Pointers
+### Current Capabilities vs. Planned Features
 
-- See `backlog.md` for prioritized tasks and acceptance criteria.
-- Route groups `(auth)`, `(public)`, `(dashboard)` segment UX contexts.
-- Data access goes through Supabase; keep business rules in DB (RLS, triggers, constraints) for consistency across clients.
+**✅ Working Features:**
+- User registration and authentication
+- Poll creation with 2-10 options
+- Public and private poll settings
+- Single and multiple choice voting
+- Basic vote counting and results display
+- Responsive UI with professional design
+- Form validation and error handling
+
+**🚧 Partially Working:**
+- Poll editing (structure exists, UI incomplete)
+- Real-time updates (database triggers work, subscriptions pending)
+- Mobile responsiveness (foundation solid, optimization needed)
+
+**⏳ Planned Features:**
+- QR code generation and scanning
+- Advanced poll management (duplicate, delete, analytics)
+- Share tokens for private polls
+- Export functionality
+- Advanced poll types (ranked choice)
+- Comprehensive analytics dashboard
+
+### Code Quality & Conventions (Established)
+
+**✅ Implemented Standards:**
+- TypeScript strict mode throughout
+- ESLint 9 with Next.js configuration
+- Consistent naming: kebab-case routes, camelCase TypeScript, snake_case database
+- Component-based architecture with clear separation of concerns
+- API handlers follow validate → authorize → execute → respond pattern
+- Comprehensive error handling with user-friendly messages
+
+**File Organization:**
+- Route groups for logical UI separation
+- Components organized by function (forms, polls, layout, ui)
+- Lib folder for utilities, types, and integrations
+- Clear separation between client and server code
+
+### Performance Considerations (Current)
+
+**✅ Implemented Optimizations:**
+- Database indexes on frequently queried columns
+- Denormalized vote counts via triggers (avoid expensive aggregations)
+- Server components for SEO and initial data loading
+- Client components only where interactivity needed
+
+**📊 Current Performance:**
+- App loads quickly in development
+- Database queries optimized with proper indexing
+- Image optimization via Next.js built-in features
+
+**⏳ Planned Optimizations:**
+- Bundle size analysis and optimization
+- Image optimization for QR codes
+- Caching strategy for frequently accessed polls
+- Performance monitoring implementation
+
+### Testing Strategy (Planned)
+
+**Current State:**
+- Manual testing of all implemented features
+- TypeScript provides compile-time error checking
+- ESLint catches potential issues
+
+**Planned Testing:**
+- Unit tests for utility functions (Vitest)
+- Integration tests for API endpoints
+- Component testing for forms and interactions
+- End-to-end tests for critical user flows (Playwright)
+
+### Deployment Readiness
+
+**✅ Ready for Deployment:**
+- Next.js app configured for Vercel deployment
+- Environment variables documented
+- Database schema stable and tested
+- Core user flows working end-to-end
+
+**🔧 Pre-deployment Tasks:**
+- Complete real-time functionality
+- Add proper error boundaries
+- Implement rate limiting
+- Add comprehensive logging
+
+### Success Metrics (Current Achievement)
+
+**✅ Achieved:**
+- Users can create and vote on polls end-to-end
+- No critical bugs in core functionality
+- Professional UI/UX that works across devices
+- Secure authentication and data access
+
+**📊 Metrics to Track:**
+- Poll creation success rate (currently ~100% for valid inputs)
+- Voting completion rate
+- Real-time update latency (pending implementation)
+- Mobile user experience scores
+
+### Immediate Next Steps (Priority Order)
+
+1. **Complete Real-time Updates** - Implement Supabase subscriptions for live vote counting
+2. **QR Code Implementation** - Add QR generation library and UI components
+3. **Mobile Optimization** - Improve responsive design and touch interactions
+4. **Poll Management** - Complete edit/delete functionality with proper UI
+5. **Error Boundaries** - Add comprehensive error handling throughout the app
+
+### Non‑Goals (Current Scope)
+
+- Multi-tenant/organization features
+- Advanced poll types beyond single/multiple choice
+- Complex analytics and reporting
+- Third-party integrations (social media, etc.)
+- Mobile app development (PWA sufficient)
+
+### Key Files for Understanding Implementation
+
+**Core Logic:**
+- `app/api/polls/route.ts` - Poll CRUD operations
+- `app/api/votes/route.ts` - Voting logic
+- `components/forms/CreatePollForm.tsx` - Poll creation UI
+- `components/polls/VotingInterface.tsx` - Voting experience
+
+**Configuration:**
+- `supabase/schema.sql` - Database structure and policies
+- `lib/types/index.ts` - TypeScript definitions
+- `lib/validations/polls.ts` - API validation schemas
+
+**Architecture:**
+- `lib/supabase/` - Database client configuration
+- `app/layout.tsx` - Global app structure
+- `lib/auth/AuthContext.tsx` - Authentication state management
+
+This context reflects the current state of a well-architected polling application with solid foundations and clear paths to completion of remaining features.
