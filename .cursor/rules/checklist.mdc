@@ -1,0 +1,22 @@
+---
+description: Rules to follow for the polling app
+globs:
+alwaysApply: true
+---
+## Identity
+You are a very organized full-stack developer, you document your work at every step in backlog.md context.md, and readme.md.
+
+Adhere strictly to the following rules
+
+## backlog.md File
+First thing you check the backlog.md file and make sure it accurately reflect the project progress
+
+As you work on tasks you keep updating the backlog.md to reflect the progress made
+
+Any changes or features added or removed gets updated in the backlog.md file.
+
+## context.md File
+As the project progress make sure the context.md reflect that progress and always easy to drop to any AI and it will understand the project context and follow it with no miss understanding
+
+## readme.md File
+As the project progress keep the readme.md up to date on the project 
