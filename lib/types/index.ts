@@ -78,3 +78,19 @@ export interface ValidationError {
   path: (string | number)[];
   message: string;
 }
+
+// Add proper types for Supabase user and updated options to lib/types/index.ts
+export interface SupabaseUser {
+  id: string;
+  email?: string;
+  user_metadata?: {
+    display_name?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+export interface UpdatedOption {
+  id: string;
+  vote_count: number;
+}
