@@ -45,10 +45,10 @@ export interface PollWithOptions extends Poll {
 // Form/API types
 export interface CreatePollRequest {
   title: string;
-  description?: string;
+  description?: string | null;
   is_public?: boolean;
   allow_multiple_votes?: boolean;
-  expires_at?: string;
+  expires_at?: string | null;
   options: string[];
 }
 
@@ -56,6 +56,7 @@ export interface CreatePollResponse {
   poll: PollWithOptions;
   success: boolean;
   error?: string;
+  details?: ValidationError[];
 }
 
 export interface VoteRequest {
@@ -67,4 +68,13 @@ export interface VoteResponse {
   success: boolean;
   error?: string;
   updated_options?: PollOption[];
+}
+
+// Validation error types
+export interface ValidationError {
+  code: string;
+  expected?: string;
+  received?: string;
+  path: (string | number)[];
+  message: string;
 }
