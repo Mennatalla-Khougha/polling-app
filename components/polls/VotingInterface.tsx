@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
-import { PollWithOptions } from '@/lib/types';
+import { PollWithOptions, SupabaseUser, UpdatedOption } from '@/lib/types';
 
 interface VotingInterfaceProps {
   pollId: string;
@@ -19,7 +19,7 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
 
   const supabase = createClient();
   const router = useRouter();
@@ -149,10 +149,10 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
         setPoll(prev => prev ? {
           ...prev,
           poll_options: prev.poll_options.map(option => {
-            const updated = result.updated_options.find((u: any) => u.id === option.id);
+            const updated = result.updated_options.find((u: UpdatedOption) => u.id === option.id);
             return updated ? { ...option, vote_count: updated.vote_count } : option;
           }),
-          total_votes: result.updated_options.reduce((sum: number, opt: any) => sum + opt.vote_count, 0)
+          total_votes: result.updated_options.reduce((sum: number, opt: UpdatedOption) => sum + opt.vote_count, 0)
         } : null);
       }
 
