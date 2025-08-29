@@ -24,6 +24,7 @@ export interface PollOption {
   poll_id: string;
   text: string;
   vote_count: number;
+  order_index?: number;
   created_at: string;
 }
 

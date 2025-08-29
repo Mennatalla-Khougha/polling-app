@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createPollSchema } from "@/lib/validations/polls";
-import { PollWithOptions } from "@/lib/types";
+import { PollWithOptions, PollOption } from "@/lib/types";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+// Type for raw poll data from Supabase with poll_options
+interface RawPollData {
+  id: string;
+  title: string;
+  description: string | null;
+  creator_id: string;
+  is_public: boolean;
+  allow_multiple_votes: boolean;
+  expires_at: string | null;
+  created_at: string;
+  poll_options: PollOption[];
 }
 
 export async function GET(request: NextRequest, { params }: PageProps) {
@@ -33,13 +46,15 @@ export async function GET(request: NextRequest, { params }: PageProps) {
       return NextResponse.json({ error: "Poll not found or you don't have permission to access it" }, { status: 404 });
     }
 
+    const typedPoll = poll as RawPollData;
+
     // Calculate total votes
-    const totalVotes = poll.poll_options.reduce((sum: number, option: any) => sum + option.vote_count, 0);
-    
+    const totalVotes = typedPoll.poll_options.reduce((sum: number, option: PollOption) => sum + option.vote_count, 0);
+
     const pollWithOptions: PollWithOptions = {
-      ...poll,
+      ...typedPoll,
       total_votes: totalVotes,
-      poll_options: poll.poll_options.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
+      poll_options: typedPoll.poll_options.sort((a: PollOption, b: PollOption) => (a.order_index || 0) - (b.order_index || 0))
     };
 
     return NextResponse.json({ poll: pollWithOptions });
