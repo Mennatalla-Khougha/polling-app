@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
-import { CreatePollRequest, CreatePollResponse } from '@/lib/types';
+import { CreatePollRequest, CreatePollResponse, ValidationError } from '@/lib/types';
 
 export function CreatePollForm() {
   const router = useRouter();
@@ -114,7 +114,7 @@ export function CreatePollForm() {
       if (!response.ok) {
         // Handle validation errors with details
         if (result.details && Array.isArray(result.details)) {
-          const errorMessages = result.details.map((err: any) =>
+          const errorMessages = result.details.map((err: ValidationError) =>
             `${err.path?.join?.('.') || 'Field'}: ${err.message}`
           ).join(', ');
           throw new Error(errorMessages);
