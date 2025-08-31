@@ -8,20 +8,25 @@ export async function GET() {
     const supabase = await createClient();
 
     // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Get user's polls
     const { data: polls, error } = await supabase
-      .from('polls')
-      .select(`
+      .from("polls")
+      .select(
+        `
         *,
         poll_options (*)
-      `)
-      .eq('creator_id', user.id)
-      .order('created_at', { ascending: false });
+      `,
+      )
+      .eq("creator_id", user.id)
+      .order("created_at", { ascending: false });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -31,7 +36,7 @@ export async function GET() {
   } catch (error) {
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -41,53 +46,68 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
 
     // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Ensure user profile exists
     const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', user.id)
+      .from("profiles")
+      .select("id")
+      .eq("id", user.id)
       .single();
 
     if (!existingProfile) {
       // Create profile if it doesn't exist
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: user.id,
-          email: user.email!,
-          display_name: user.user_metadata?.display_name || user.email!.split('@')[0]
-        });
+      const { error: profileError } = await supabase.from("profiles").insert({
+        id: user.id,
+        email: user.email!,
+        display_name:
+          user.user_metadata?.display_name || user.email!.split("@")[0],
+      });
 
       if (profileError) {
-        console.error('Profile creation error:', profileError);
-        return NextResponse.json({ error: "Failed to create user profile" }, { status: 500 });
+        console.error("Profile creation error:", profileError);
+        return NextResponse.json(
+          { error: "Failed to create user profile" },
+          { status: 500 },
+        );
       }
     }
 
     // Parse and validate request body
     const body = await request.json();
-    console.log('Received poll data:', JSON.stringify(body, null, 2));
+    console.log("Received poll data:", JSON.stringify(body, null, 2));
 
     const validationResult = createPollSchema.safeParse(body);
 
     if (!validationResult.success) {
-      console.log('Validation errors:', JSON.stringify(validationResult.error.errors, null, 2));
+      console.log(
+        "Validation errors:",
+        JSON.stringify(validationResult.error.issues, null, 2),
+      );
       return NextResponse.json(
-        { error: "Invalid input", details: validationResult.error.errors },
-        { status: 400 }
+        { error: "Invalid input", details: validationResult.error.issues },
+        { status: 400 },
       );
     }
 
-    const { title, description, is_public, allow_multiple_votes, expires_at, options } = validationResult.data;
+    const {
+      title,
+      description,
+      is_public,
+      allow_multiple_votes,
+      expires_at,
+      options,
+    } = validationResult.data;
 
     // Create poll
     const { data: poll, error: pollError } = await supabase
-      .from('polls')
+      .from("polls")
       .insert({
         title,
         description,
@@ -111,14 +131,17 @@ export async function POST(request: NextRequest) {
     }));
 
     const { data: pollOptions, error: optionsError } = await supabase
-      .from('poll_options')
+      .from("poll_options")
       .insert(optionsToInsert)
       .select();
 
     if (optionsError) {
       // Clean up the poll if options creation failed
-      await supabase.from('polls').delete().eq('id', poll.id);
-      return NextResponse.json({ error: optionsError.message }, { status: 500 });
+      await supabase.from("polls").delete().eq("id", poll.id);
+      return NextResponse.json(
+        { error: optionsError.message },
+        { status: 500 },
+      );
     }
 
     // Return complete poll with options
@@ -135,11 +158,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
-    console.error('Poll creation error:', error);
+    console.error("Poll creation error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
-
