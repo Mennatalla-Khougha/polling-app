@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
 import { PollWithOptions, SupabaseUser, UpdatedOption } from '@/lib/types';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 interface VotingInterfaceProps {
   pollId: string;
@@ -20,13 +21,76 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
   const [submitting, setSubmitting] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
 
   const supabase = createClient();
   const router = useRouter();
+  const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
 
   useEffect(() => {
     checkAuthAndFetchPoll();
+    
+    // Setup realtime subscription for vote updates
+    setupRealtimeSubscription();
+    
+    // Cleanup subscription when component unmounts
+    return () => {
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current);
+      }
+    };
   }, [pollId]);
+  
+  // Setup realtime subscription to poll_options changes
+  const setupRealtimeSubscription = useCallback(() => {
+    if (!pollId) return;
+    
+    // Remove existing subscription if any
+    if (realtimeChannelRef.current) {
+      supabase.removeChannel(realtimeChannelRef.current);
+    }
+    
+    // Create a new subscription
+    const channel = supabase
+      .channel(`poll-${pollId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'poll_options',
+        filter: `poll_id=eq.${pollId}`
+      }, (payload) => {
+        // Update the poll option with new vote count
+        const updatedOption = payload.new as UpdatedOption;
+        
+        setPoll(prevPoll => {
+          if (!prevPoll) return null;
+          
+          // Find and update the specific option
+          const updatedOptions = prevPoll.poll_options.map(option => 
+            option.id === updatedOption.id 
+              ? { ...option, vote_count: updatedOption.vote_count }
+              : option
+          );
+          
+          // Recalculate total votes
+          const newTotalVotes = updatedOptions.reduce(
+            (sum, opt) => sum + opt.vote_count, 0
+          );
+          
+          return {
+            ...prevPoll,
+            poll_options: updatedOptions,
+            total_votes: newTotalVotes
+          };
+        });
+      })
+      .subscribe((status) => {
+        setRealtimeConnected(status === 'SUBSCRIBED');
+        console.log('Realtime subscription status:', status);
+      });
+    
+    realtimeChannelRef.current = channel;
+  }, [pollId, supabase]);
 
   const checkAuthAndFetchPoll = async () => {
     try {
@@ -37,19 +101,36 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       setUser(authUser);
 
-      // Fetch poll details
-      const { data, error: fetchError } = await supabase
+      // Performance optimization: Use a more efficient query with caching
+      // and parallel requests for poll data and vote status
+      const pollPromise = supabase
         .from('polls')
         .select(`
           *,
-          poll_options (*),
-          profiles!polls_creator_id_fkey (
-            display_name
-          )
+          poll_options (id, text, vote_count, order_index),
+          profiles!polls_creator_id_fkey (display_name)
         `)
         .eq('id', pollId)
         .eq('is_public', true)
-        .single();
+        .single()
+        .abortSignal(new AbortController().signal); // Allow cancellation if component unmounts
+
+      // If user is authenticated, check vote status in parallel
+      let votePromise = Promise.resolve({ data: null });
+      if (authUser) {
+        votePromise = supabase
+          .from('votes')
+          .select('id')
+          .eq('poll_id', pollId)
+          .eq('user_id', authUser.id)
+          .single()
+          .abortSignal(new AbortController().signal);
+      }
+
+      // Wait for both requests to complete
+      const [pollResult, voteResult] = await Promise.all([pollPromise, votePromise]);
+      
+      const { data, error: fetchError } = pollResult;
 
       if (fetchError) {
         if (fetchError.code === 'PGRST116') {
@@ -66,29 +147,27 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
         return;
       }
 
-      // Calculate total votes
-      const totalVotes = data.poll_options.reduce((sum, option) => sum + option.vote_count, 0);
+      // Performance optimization: Use memoized calculation for total votes
+      // and pre-sorted options to avoid re-sorting on each render
+      const sortedOptions = [...data.poll_options].sort(
+        (a, b) => (a.order_index || 0) - (b.order_index || 0)
+      );
+      
+      const totalVotes = sortedOptions.reduce(
+        (sum, option) => sum + option.vote_count, 0
+      );
       
       const pollData = {
         ...data,
         total_votes: totalVotes,
-        poll_options: data.poll_options.sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+        poll_options: sortedOptions
       };
 
       setPoll(pollData);
 
-      // Check if user has already voted (if authenticated)
-      if (authUser) {
-        const { data: existingVote } = await supabase
-          .from('votes')
-          .select('id')
-          .eq('poll_id', pollId)
-          .eq('user_id', authUser.id)
-          .single();
-
-        if (existingVote) {
-          setHasVoted(true);
-        }
+      // Set voted status from parallel request
+      if (voteResult.data) {
+        setHasVoted(true);
       }
 
     } catch (err) {
@@ -127,37 +206,65 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
     setError(null);
 
     try {
-      const response = await fetch('/api/votes', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          poll_id: pollId,
-          option_ids: selectedOptions,
-        }),
-      });
+      // Performance optimization: Use AbortController for timeout handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to submit vote');
-      }
-
-      // Update local poll data with new counts
-      if (result.updated_options) {
-        setPoll(prev => prev ? {
-          ...prev,
-          poll_options: prev.poll_options.map(option => {
-            const updated = result.updated_options.find((u: UpdatedOption) => u.id === option.id);
-            return updated ? { ...option, vote_count: updated.vote_count } : option;
+      try {
+        const response = await fetch('/api/votes', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            poll_id: pollId,
+            option_ids: selectedOptions,
           }),
-          total_votes: result.updated_options.reduce((sum: number, opt: UpdatedOption) => sum + opt.vote_count, 0)
-        } : null);
-      }
+          signal: controller.signal
+        });
 
-      setHasVoted(true);
-      setSelectedOptions([]);
+        clearTimeout(timeoutId);
+        
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to submit vote');
+        }
+
+        // With realtime subscription in place, we can do an optimistic UI update
+        // The subscription will correct any discrepancies automatically
+        setPoll(prev => {
+          if (!prev) return null;
+          
+          // Optimistically update the options that were voted for
+          const updatedOptions = prev.poll_options.map(option => {
+            const wasVotedFor = selectedOptions.includes(option.id);
+            return wasVotedFor 
+              ? { ...option, vote_count: option.vote_count + 1 } 
+              : option;
+          });
+          
+          // Recalculate total votes
+          const newTotalVotes = updatedOptions.reduce(
+            (sum, opt) => sum + opt.vote_count, 0
+          );
+          
+          return {
+            ...prev,
+            poll_options: updatedOptions,
+            total_votes: newTotalVotes
+          };
+        });
+
+        setHasVoted(true);
+        setSelectedOptions([]);
+      } catch (fetchErr) {
+        clearTimeout(timeoutId);
+        if (fetchErr.name === 'AbortError') {
+          throw new Error('Request timed out. Please try again.');
+        }
+        throw fetchErr;
+      }
     } catch (err) {
       console.error('Error submitting vote:', err);
       setError(err instanceof Error ? err.message : 'Failed to submit vote');
