@@ -68,7 +68,7 @@ export interface VoteRequest {
 export interface VoteResponse {
   success: boolean;
   error?: string;
-  updated_options?: PollOption[];
+  updated_options?: UpdatedOption[];
 }
 
 // Validation error types

@@ -8,9 +8,15 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
 
     // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
-      return NextResponse.json({ error: "You must be logged in to vote" }, { status: 401 });
+      return NextResponse.json(
+        { error: "You must be logged in to vote" },
+        { status: 401 },
+      );
     }
 
     // Parse and validate request body
@@ -19,8 +25,8 @@ export async function POST(request: NextRequest) {
 
     if (!validationResult.success) {
       return NextResponse.json(
-        { error: "Invalid vote data", details: validationResult.error.errors },
-        { status: 400 }
+        { error: "Invalid vote data", details: validationResult.error.issues },
+        { status: 400 },
       );
     }
 
@@ -28,14 +34,17 @@ export async function POST(request: NextRequest) {
 
     // Check if poll exists and is accessible
     const { data: poll, error: pollError } = await supabase
-      .from('polls')
-      .select('id, is_public, allow_multiple_votes, expires_at')
-      .eq('id', poll_id)
-      .eq('is_public', true)
+      .from("polls")
+      .select("id, is_public, allow_multiple_votes, expires_at")
+      .eq("id", poll_id)
+      .eq("is_public", true)
       .single();
 
     if (pollError || !poll) {
-      return NextResponse.json({ error: "Poll not found or not accessible" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Poll not found or not accessible" },
+        { status: 404 },
+      );
     }
 
     // Check if poll has expired
@@ -45,56 +54,72 @@ export async function POST(request: NextRequest) {
 
     // Check if user has already voted
     const { data: existingVote } = await supabase
-      .from('votes')
-      .select('id')
-      .eq('poll_id', poll_id)
-      .eq('user_id', user.id)
+      .from("votes")
+      .select("id")
+      .eq("poll_id", poll_id)
+      .eq("user_id", user.id)
       .single();
 
     if (existingVote) {
-      return NextResponse.json({ error: "You have already voted on this poll" }, { status: 400 });
+      return NextResponse.json(
+        { error: "You have already voted on this poll" },
+        { status: 400 },
+      );
     }
 
     // Validate option IDs belong to this poll
     const { data: validOptions, error: optionsError } = await supabase
-      .from('poll_options')
-      .select('id')
-      .eq('poll_id', poll_id)
-      .in('id', option_ids);
+      .from("poll_options")
+      .select("id")
+      .eq("poll_id", poll_id)
+      .in("id", option_ids);
 
-    if (optionsError || !validOptions || validOptions.length !== option_ids.length) {
-      return NextResponse.json({ error: "Invalid poll options" }, { status: 400 });
+    if (
+      optionsError ||
+      !validOptions ||
+      validOptions.length !== option_ids.length
+    ) {
+      return NextResponse.json(
+        { error: "Invalid poll options" },
+        { status: 400 },
+      );
     }
 
     // For single-choice polls, ensure only one option is selected
     if (!poll.allow_multiple_votes && option_ids.length > 1) {
-      return NextResponse.json({ error: "This poll only allows one choice" }, { status: 400 });
+      return NextResponse.json(
+        { error: "This poll only allows one choice" },
+        { status: 400 },
+      );
     }
 
     // Create votes for each selected option
-    const votesToInsert = option_ids.map(option_id => ({
+    const votesToInsert = option_ids.map((option_id) => ({
       poll_id,
       option_id,
       user_id: user.id,
     }));
 
     const { error: voteError } = await supabase
-      .from('votes')
+      .from("votes")
       .insert(votesToInsert);
 
     if (voteError) {
-      console.error('Vote insertion error:', voteError);
-      return NextResponse.json({ error: "Failed to record vote" }, { status: 500 });
+      console.error("Vote insertion error:", voteError);
+      return NextResponse.json(
+        { error: "Failed to record vote" },
+        { status: 500 },
+      );
     }
 
     // Get updated vote counts
     const { data: updatedOptions, error: countError } = await supabase
-      .from('poll_options')
-      .select('id, vote_count')
-      .eq('poll_id', poll_id);
+      .from("poll_options")
+      .select("id, vote_count")
+      .eq("poll_id", poll_id);
 
     if (countError) {
-      console.error('Count fetch error:', countError);
+      console.error("Count fetch error:", countError);
     }
 
     const response: VoteResponse = {
@@ -104,10 +129,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
-    console.error('Vote submission error:', error);
+    console.error("Vote submission error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
