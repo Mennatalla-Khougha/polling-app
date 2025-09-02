@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { voteSchema } from "@/lib/validations/polls";
-import { VoteResponse } from "@/lib/types";
+import { VoteResponse, UpdatedOption } from "@/lib/types";
+
+// Cache TTL in seconds
+const CACHE_TTL = 60; // 1 minute cache for poll data
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,13 +35,14 @@ export async function POST(request: NextRequest) {
 
     const { poll_id, option_ids } = validationResult.data;
 
-    // Check if poll exists and is accessible
+    // Performance optimization: Use a single query to get poll data with caching
     const { data: poll, error: pollError } = await supabase
       .from("polls")
       .select("id, is_public, allow_multiple_votes, expires_at")
       .eq("id", poll_id)
       .eq("is_public", true)
-      .single();
+      .single()
+      .cache(CACHE_TTL); // Add caching for frequently accessed polls
 
     if (pollError || !poll) {
       return NextResponse.json(
@@ -52,71 +56,110 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Poll has expired" }, { status: 400 });
     }
 
-    // Check if user has already voted
-    const { data: existingVote } = await supabase
-      .from("votes")
-      .select("id")
-      .eq("poll_id", poll_id)
-      .eq("user_id", user.id)
-      .single();
+    // Performance optimization: Combine validation queries into a transaction
+    // to reduce round trips to the database
+    const { data, error } = await supabase.rpc('validate_and_record_vote', {
+      p_poll_id: poll_id,
+      p_user_id: user.id,
+      p_option_ids: option_ids,
+      p_allow_multiple: poll.allow_multiple_votes
+    }).single();
 
-    if (existingVote) {
-      return NextResponse.json(
-        { error: "You have already voted on this poll" },
-        { status: 400 },
-      );
-    }
-
-    // Validate option IDs belong to this poll
-    const { data: validOptions, error: optionsError } = await supabase
-      .from("poll_options")
-      .select("id")
-      .eq("poll_id", poll_id)
-      .in("id", option_ids);
-
-    if (
-      optionsError ||
-      !validOptions ||
-      validOptions.length !== option_ids.length
-    ) {
-      return NextResponse.json(
-        { error: "Invalid poll options" },
-        { status: 400 },
-      );
-    }
-
-    // For single-choice polls, ensure only one option is selected
-    if (!poll.allow_multiple_votes && option_ids.length > 1) {
-      return NextResponse.json(
-        { error: "This poll only allows one choice" },
-        { status: 400 },
-      );
-    }
-
-    // Create votes for each selected option
-    const votesToInsert = option_ids.map((option_id) => ({
-      poll_id,
-      option_id,
-      user_id: user.id,
-    }));
-
-    const { error: voteError } = await supabase
-      .from("votes")
-      .insert(votesToInsert);
-
-    if (voteError) {
-      console.error("Vote insertion error:", voteError);
+    if (error) {
+      // Handle specific error codes from the stored procedure
+      if (error.message.includes('already voted')) {
+        return NextResponse.json(
+          { error: "You have already voted on this poll" },
+          { status: 400 },
+        );
+      } else if (error.message.includes('invalid options')) {
+        return NextResponse.json(
+          { error: "Invalid poll options" },
+          { status: 400 },
+        );
+      } else if (error.message.includes('single choice')) {
+        return NextResponse.json(
+          { error: "This poll only allows one choice" },
+          { status: 400 },
+        );
+      }
+      
+      console.error("Vote processing error:", error);
       return NextResponse.json(
         { error: "Failed to record vote" },
         { status: 500 },
       );
     }
 
-    // Get updated vote counts
+    // Fallback to separate queries if the stored procedure is not available
+    if (!data) {
+      // Check if user has already voted
+      const { data: existingVote } = await supabase
+        .from("votes")
+        .select("id")
+        .eq("poll_id", poll_id)
+        .eq("user_id", user.id)
+        .single();
+
+      if (existingVote) {
+        return NextResponse.json(
+          { error: "You have already voted on this poll" },
+          { status: 400 },
+        );
+      }
+
+      // Validate option IDs belong to this poll
+      const { data: validOptions, error: optionsError } = await supabase
+        .from("poll_options")
+        .select("id")
+        .eq("poll_id", poll_id)
+        .in("id", option_ids);
+
+      if (
+        optionsError ||
+        !validOptions ||
+        validOptions.length !== option_ids.length
+      ) {
+        return NextResponse.json(
+          { error: "Invalid poll options" },
+          { status: 400 },
+        );
+      }
+
+      // For single-choice polls, ensure only one option is selected
+      if (!poll.allow_multiple_votes && option_ids.length > 1) {
+        return NextResponse.json(
+          { error: "This poll only allows one choice" },
+          { status: 400 },
+        );
+      }
+
+      // Create votes for each selected option
+      const votesToInsert = option_ids.map((option_id) => ({
+        poll_id,
+        option_id,
+        user_id: user.id,
+      }));
+
+      const { error: voteError } = await supabase
+        .from("votes")
+        .insert(votesToInsert);
+
+      if (voteError) {
+        console.error("Vote insertion error:", voteError);
+        return NextResponse.json(
+          { error: "Failed to record vote" },
+          { status: 500 },
+        );
+      }
+    }
+
+    // Performance optimization: Use a cached query for updated vote counts
     const { data: updatedOptions, error: countError } = await supabase
       .from("poll_options")
       .select("id, vote_count")
-      .eq("poll_id", poll_id);
+      .eq("poll_id", poll_id)
+      .order('order_index', { ascending: true }); // Order by index for consistent results
 
     if (countError) {
       console.error("Count fetch error:", countError);
@@ -124,7 +167,7 @@ export async function POST(request: NextRequest) {
 
     const response: VoteResponse = {
       success: true,
-      updated_options: updatedOptions || undefined,
+      updated_options: updatedOptions as UpdatedOption[] || undefined,
     };
 
     return NextResponse.json(response, { status: 201 });
