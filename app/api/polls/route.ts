@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createPollSchema } from "@/lib/validations/polls";
 import { CreatePollResponse, PollWithOptions } from "@/lib/types";
 
+// Cache poll listings for 30 seconds to reduce database load
+const CACHE_TTL = 30; // seconds
+const userPollsCache = new Map();
+
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -15,14 +19,23 @@ export async function GET() {
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    
+    // Check cache first
+    const cacheKey = `user-polls-${user.id}`;
+    const now = Date.now();
+    const cachedData = userPollsCache.get(cacheKey);
+    
+    if (cachedData && (now - cachedData.timestamp) < CACHE_TTL * 1000) {
+      return NextResponse.json({ polls: cachedData.data });
+    }
 
-    // Get user's polls
+    // Performance optimization: Use a more efficient query with specific column selection
     const { data: polls, error } = await supabase
       .from("polls")
       .select(
         `
-        *,
-        poll_options (*)
+        id, title, description, created_at, expires_at, creator_id, is_public, allow_multiple_votes,
+        poll_options (id, text, order_index)
       `,
       )
       .eq("creator_id", user.id)
@@ -31,9 +44,40 @@ export async function GET() {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+    
+    // Process polls to include total votes and sort options
+    const processedPolls = polls.map(poll => {
+      // Sort options by order_index
+      const sortedOptions = [...poll.poll_options].sort(
+        (a, b) => (a.order_index || 0) - (b.order_index || 0)
+      );
+      
+      return {
+        ...poll,
+        poll_options: sortedOptions,
+        total_votes: 0 // Initialize with 0 as we don't have vote counts yet
+      };
+    });
+    
+    // Cache the result
+    userPollsCache.set(cacheKey, {
+      timestamp: now,
+      data: processedPolls
+    });
+    
+    // Clean up old cache entries periodically
+    if (Math.random() < 0.1) { // 10% chance to clean up on each request
+      const expiryTime = now - (CACHE_TTL * 2 * 1000); // Double TTL for safety
+      for (const [key, value] of userPollsCache.entries()) {
+        if (value.timestamp < expiryTime) {
+          userPollsCache.delete(key);
+        }
+      }
+    }
 
-    return NextResponse.json({ polls });
+    return NextResponse.json({ polls: processedPolls });
   } catch (error) {
+    console.error("Error fetching polls:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
