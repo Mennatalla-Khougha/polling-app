@@ -93,5 +93,6 @@ export interface SupabaseUser {
 
 export interface UpdatedOption {
   id: string;
+  poll_id: string;
   vote_count: number;
 }
