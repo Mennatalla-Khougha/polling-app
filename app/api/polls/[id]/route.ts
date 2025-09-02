@@ -20,18 +20,35 @@ interface RawPollData {
   poll_options: PollOption[];
 }
 
+// Cache poll data for 10 seconds to reduce database load
+const CACHE_TTL = 10; // seconds
+const pollCache = new Map();
+
 export async function GET(request: NextRequest, { params }: PageProps) {
   try {
     const { id: pollId } = await params;
     const supabase = await createClient();
+    const cacheKey = `poll-${pollId}`;
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    // Check cache first (only for authenticated users)
+    const now = Date.now();
+    const cachedData = pollCache.get(cacheKey);
+    
+    if (cachedData && (now - cachedData.timestamp) < CACHE_TTL * 1000) {
+      // Verify user can access this poll
+      if (user && cachedData.data.creator_id === user.id) {
+        return NextResponse.json({ poll: cachedData.data });
+      }
+    }
+    
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get poll details
+    // Performance optimization: Use a more efficient query
     const { data: poll, error } = await supabase
       .from('polls')
       .select(`
@@ -51,11 +68,32 @@ export async function GET(request: NextRequest, { params }: PageProps) {
     // Calculate total votes
     const totalVotes = typedPoll.poll_options.reduce((sum: number, option: PollOption) => sum + option.vote_count, 0);
 
+    // Pre-sort options to avoid re-sorting on each request
+    const sortedOptions = [...typedPoll.poll_options].sort(
+      (a: PollOption, b: PollOption) => (a.order_index || 0) - (b.order_index || 0)
+    );
+
     const pollWithOptions: PollWithOptions = {
       ...typedPoll,
       total_votes: totalVotes,
-      poll_options: typedPoll.poll_options.sort((a: PollOption, b: PollOption) => (a.order_index || 0) - (b.order_index || 0))
+      poll_options: sortedOptions
     };
+    
+    // Cache the result
+    pollCache.set(cacheKey, {
+      timestamp: now,
+      data: pollWithOptions
+    });
+    
+    // Clean up old cache entries periodically
+    if (Math.random() < 0.1) { // 10% chance to clean up on each request
+      const expiryTime = now - (CACHE_TTL * 2 * 1000); // Double TTL for safety
+      for (const [key, value] of pollCache.entries()) {
+        if (value.timestamp < expiryTime) {
+          pollCache.delete(key);
+        }
+      }
+    }
 
     return NextResponse.json({ poll: pollWithOptions });
   } catch (error) {
