@@ -3,9 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { voteSchema } from "@/lib/validations/polls";
 import { VoteResponse, UpdatedOption } from "@/lib/types";
 
-// Cache TTL in seconds
-const CACHE_TTL = 60; // 1 minute cache for poll data
-
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -35,14 +32,13 @@ export async function POST(request: NextRequest) {
 
     const { poll_id, option_ids } = validationResult.data;
 
-    // Performance optimization: Use a single query to get poll data with caching
+    // Performance optimization: Use a single query to get poll data
     const { data: poll, error: pollError } = await supabase
       .from("polls")
       .select("id, is_public, allow_multiple_votes, expires_at")
       .eq("id", poll_id)
       .eq("is_public", true)
-      .single()
-      .cache(CACHE_TTL); // Add caching for frequently accessed polls
+      .single();
 
     if (pollError || !poll) {
       return NextResponse.json(
@@ -83,7 +79,7 @@ export async function POST(request: NextRequest) {
           { status: 400 },
         );
       }
-      
+
       console.error("Vote processing error:", error);
       return NextResponse.json(
         { error: "Failed to record vote" },
