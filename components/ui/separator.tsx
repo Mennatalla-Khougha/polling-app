@@ -1,18 +1,15 @@
+/* eslint-disable */
 import * as React from "react"
+import * as SeparatorPrimitive from "@radix-ui/react-separator"
 
 import { cn } from "@/lib/utils"
 
 const Separator = React.forwardRef<
-  React.ElementRef<"div">,
-  React.ComponentPropsWithoutRef<"div"> & {
-    orientation?: "horizontal" | "vertical"
-  }
+  React.ElementRef<typeof SeparatorPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof SeparatorPrimitive.Root>
 >(
-  (
-    { className, orientation = "horizontal", decorative = true, ...props },
-    ref
-  ) => (
-    <div
+  ({ className, orientation = "horizontal", decorative = true, ...props }, ref) => (
+    <SeparatorPrimitive.Root
       ref={ref}
       decorative={decorative}
       orientation={orientation}
@@ -25,6 +22,6 @@ const Separator = React.forwardRef<
     />
   )
 )
-Separator.displayName = "Separator"
+Separator.displayName = SeparatorPrimitive.Root.displayName
 
 export { Separator }
