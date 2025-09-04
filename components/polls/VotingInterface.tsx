@@ -6,8 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
-import { PollWithOptions, SupabaseUser, UpdatedOption } from '@/lib/types';
-import { RealtimeChannel } from '@supabase/supabase-js';
+import { PollWithOptions, UpdatedOption } from '@/lib/types';
+import { RealtimeChannel, User } from '@supabase/supabase-js';
 
 interface VotingInterfaceProps {
   pollId: string;
@@ -20,7 +20,7 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
-  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
 
   const supabase = createClient();
@@ -29,10 +29,10 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
 
   useEffect(() => {
     checkAuthAndFetchPoll();
-    
+
     // Setup realtime subscription for vote updates
     setupRealtimeSubscription();
-    
+
     // Cleanup subscription when component unmounts
     return () => {
       if (realtimeChannelRef.current) {
@@ -40,16 +40,16 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
       }
     };
   }, [pollId]);
-  
+
   // Setup realtime subscription to poll_options changes
   const setupRealtimeSubscription = useCallback(() => {
     if (!pollId) return;
-    
+
     // Remove existing subscription if any
     if (realtimeChannelRef.current) {
       supabase.removeChannel(realtimeChannelRef.current);
     }
-    
+
     // Create a new subscription
     const channel = supabase
       .channel(`poll-${pollId}`)
@@ -61,22 +61,22 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
       }, (payload) => {
         // Update the poll option with new vote count
         const updatedOption = payload.new as UpdatedOption;
-        
+
         setPoll(prevPoll => {
           if (!prevPoll) return null;
-          
+
           // Find and update the specific option
-          const updatedOptions = prevPoll.poll_options.map(option => 
-            option.id === updatedOption.id 
+          const updatedOptions = prevPoll.poll_options.map(option =>
+            option.id === updatedOption.id
               ? { ...option, vote_count: updatedOption.vote_count }
               : option
           );
-          
+
           // Recalculate total votes
           const newTotalVotes = updatedOptions.reduce(
             (sum, opt) => sum + opt.vote_count, 0
           );
-          
+
           return {
             ...prevPoll,
             poll_options: updatedOptions,
@@ -88,7 +88,7 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
         setRealtimeConnected(status === 'SUBSCRIBED');
         console.log('Realtime subscription status:', status);
       });
-    
+
     realtimeChannelRef.current = channel;
   }, [pollId, supabase]);
 
@@ -101,36 +101,27 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       setUser(authUser);
 
-      // Performance optimization: Use a more efficient query with caching
-      // and parallel requests for poll data and vote status
-      const pollPromise = supabase
+      // Get poll data
+      const { data, error: fetchError } = await supabase
         .from('polls')
         .select(`
-          *,
-          poll_options (id, text, vote_count, order_index),
-          profiles!polls_creator_id_fkey (display_name)
+          id, title, description, expires_at, allow_multiple_votes, creator_id,
+          poll_options (id, text, vote_count, order_index)
         `)
         .eq('id', pollId)
         .eq('is_public', true)
-        .single()
-        .abortSignal(new AbortController().signal); // Allow cancellation if component unmounts
+        .single();
 
-      // If user is authenticated, check vote status in parallel
-      let votePromise = Promise.resolve({ data: null });
+      // If user is authenticated, check vote status
       if (authUser) {
-        votePromise = supabase
+        const { data: existingVote } = await supabase
           .from('votes')
           .select('id')
           .eq('poll_id', pollId)
           .eq('user_id', authUser.id)
-          .single()
-          .abortSignal(new AbortController().signal);
+          .single();
+        setHasVoted(!!existingVote);
       }
-
-      // Wait for both requests to complete
-      const [pollResult, voteResult] = await Promise.all([pollPromise, votePromise]);
-      
-      const { data, error: fetchError } = pollResult;
 
       if (fetchError) {
         if (fetchError.code === 'PGRST116') {
@@ -152,23 +143,18 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
       const sortedOptions = [...data.poll_options].sort(
         (a, b) => (a.order_index || 0) - (b.order_index || 0)
       );
-      
+
       const totalVotes = sortedOptions.reduce(
         (sum, option) => sum + option.vote_count, 0
       );
-      
+
       const pollData = {
         ...data,
         total_votes: totalVotes,
         poll_options: sortedOptions
       };
 
-      setPoll(pollData);
-
-      // Set voted status from parallel request
-      if (voteResult.data) {
-        setHasVoted(true);
-      }
+      setPoll(pollData as PollWithOptions);
 
     } catch (err) {
       console.error('Error fetching poll:', err);
@@ -183,7 +169,7 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
 
     if (poll.allow_multiple_votes) {
       // Multiple choice - toggle option
-      setSelectedOptions(prev => 
+      setSelectedOptions(prev =>
         prev.includes(optionId)
           ? prev.filter(id => id !== optionId)
           : [...prev, optionId]
@@ -224,7 +210,7 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
         });
 
         clearTimeout(timeoutId);
-        
+
         const result = await response.json();
 
         if (!response.ok) {
@@ -235,20 +221,20 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
         // The subscription will correct any discrepancies automatically
         setPoll(prev => {
           if (!prev) return null;
-          
+
           // Optimistically update the options that were voted for
           const updatedOptions = prev.poll_options.map(option => {
             const wasVotedFor = selectedOptions.includes(option.id);
-            return wasVotedFor 
-              ? { ...option, vote_count: option.vote_count + 1 } 
+            return wasVotedFor
+              ? { ...option, vote_count: option.vote_count + 1 }
               : option;
           });
-          
+
           // Recalculate total votes
           const newTotalVotes = updatedOptions.reduce(
             (sum, opt) => sum + opt.vote_count, 0
           );
-          
+
           return {
             ...prev,
             poll_options: updatedOptions,
@@ -258,9 +244,9 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
 
         setHasVoted(true);
         setSelectedOptions([]);
-      } catch (fetchErr) {
+      } catch (fetchErr: unknown) {
         clearTimeout(timeoutId);
-        if (fetchErr.name === 'AbortError') {
+        if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
           throw new Error('Request timed out. Please try again.');
         }
         throw fetchErr;
@@ -325,7 +311,7 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
             <CardDescription>
               {poll.description && <p className="mb-2">{poll.description}</p>}
               <div className="flex items-center gap-4 text-sm">
-                <span>By {poll.profiles?.display_name || 'Anonymous'}</span>
+                <span>By Anonymous</span>
                 <span>•</span>
                 <span>{poll.total_votes} vote{poll.total_votes !== 1 ? 's' : ''}</span>
                 {poll.expires_at && (
@@ -345,8 +331,8 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
             <CardHeader>
               <CardTitle>Cast Your Vote</CardTitle>
               <CardDescription>
-                {poll.allow_multiple_votes 
-                  ? 'Select one or more options' 
+                {poll.allow_multiple_votes
+                  ? 'Select one or more options'
                   : 'Select one option'}
               </CardDescription>
             </CardHeader>
@@ -354,9 +340,9 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
               {!user && (
                 <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
                   <p className="text-sm text-blue-800">
-                    You need to be logged in to vote. 
-                    <Button 
-                      variant="link" 
+                    You need to be logged in to vote.
+                    <Button
+                      variant="link"
                       className="p-0 h-auto ml-1"
                       onClick={() => router.push('/login')}
                     >
@@ -378,7 +364,7 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
                       disabled={!user || submitting}
                       className="w-4 h-4"
                     />
-                    <Label 
+                    <Label
                       htmlFor={`option-${option.id}`}
                       className="flex-1 cursor-pointer"
                     >
@@ -423,26 +409,24 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
           <CardContent>
             <div className="space-y-4">
               {poll.poll_options.map((option) => {
-                const percentage = poll.total_votes > 0 
+                const percentage = (poll.total_votes && poll.total_votes > 0)
                   ? Math.round((option.vote_count / poll.total_votes) * 100)
-                  : 0;
-                
-                return (
-                  <div key={option.id} className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium">{option.text}</span>
-                      <span className="text-sm text-gray-500">
-                        {option.vote_count} vote{option.vote_count !== 1 ? 's' : ''} ({percentage}%)
-                      </span>
+                  : 0; return (
+                    <div key={option.id} className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">{option.text}</span>
+                        <span className="text-sm text-gray-500">
+                          {option.vote_count} vote{option.vote_count !== 1 ? 's' : ''} ({percentage}%)
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                );
+                  );
               })}
             </div>
           </CardContent>
