@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
 import { PollWithOptions } from '@/lib/types';
+import { fetchWithCsrf } from '@/lib/csrf';
 
 export function PollsList() {
   const [polls, setPolls] = useState<PollWithOptions[]>([]);
@@ -34,7 +35,7 @@ export function PollsList() {
         return;
       }
 
-      const response = await fetch('/api/polls');
+      const response = await fetchWithCsrf('/api/polls');
       if (!response.ok) {
         throw new Error('Failed to fetch polls');
       }
@@ -51,7 +52,7 @@ export function PollsList() {
 
   const handleDeletePoll = async (pollId: string) => {
     try {
-      const response = await fetch(`/api/polls/${pollId}`, {
+      const response = await fetchWithCsrf(`/api/polls/${pollId}`, {
         method: 'DELETE',
       });
 
