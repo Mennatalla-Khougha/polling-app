@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
 import { PollWithOptions, UpdatedOption } from '@/lib/types';
 import { RealtimeChannel, User } from '@supabase/supabase-js';
+import { fetchWithCsrf } from '@/lib/csrf';
 
 interface VotingInterfaceProps {
   pollId: string;
@@ -197,7 +198,7 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
       try {
-        const response = await fetch('/api/votes', {
+        const response = await fetchWithCsrf('/api/votes', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
