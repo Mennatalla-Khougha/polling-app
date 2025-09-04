@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { createClient } from '@/lib/supabase/client';
-import { PollWithOptions } from '@/lib/types';
+import { PollWithOptions, PollOption } from '@/lib/types';
 
 interface PollDetailsProps {
   pollId: string;
@@ -60,12 +60,12 @@ export function PollDetails({ pollId }: PollDetailsProps) {
       }
 
       // Calculate total votes
-      const totalVotes = data.poll_options.reduce((sum, option) => sum + option.vote_count, 0);
-      
+      const totalVotes = data.poll_options.reduce((sum: number, option: PollOption) => sum + option.vote_count, 0);
+
       setPoll({
         ...data,
         total_votes: totalVotes,
-        poll_options: data.poll_options.sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+        poll_options: data.poll_options.sort((a: PollOption, b: PollOption) => (a.order_index || 0) - (b.order_index || 0))
       });
     } catch (err) {
       console.error('Error fetching poll:', err);
@@ -99,14 +99,14 @@ export function PollDetails({ pollId }: PollDetailsProps) {
 
   const getStatusBadge = () => {
     if (!poll) return null;
-    
+
     const now = new Date();
     const expiry = poll.expires_at ? new Date(poll.expires_at) : null;
-    
+
     if (expiry && expiry < now) {
       return <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-md">Expired</span>;
     }
-    
+
     return <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-md">Active</span>;
   };
 
@@ -179,7 +179,7 @@ export function PollDetails({ pollId }: PollDetailsProps) {
                     <p className="text-sm text-gray-600 mt-1">{poll.description}</p>
                   </div>
                 )}
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label className="text-sm font-medium">Visibility</Label>
@@ -261,10 +261,10 @@ export function PollDetails({ pollId }: PollDetailsProps) {
                 ) : (
                   <div className="space-y-4">
                     {poll.poll_options.map((option) => {
-                      const percentage = poll.total_votes > 0 
+                      const percentage = (poll.total_votes && poll.total_votes > 0)
                         ? Math.round((option.vote_count / poll.total_votes) * 100)
                         : 0;
-                      
+
                       return (
                         <div key={option.id} className="space-y-2">
                           <div className="flex justify-between items-center">
@@ -293,13 +293,13 @@ export function PollDetails({ pollId }: PollDetailsProps) {
         <Card>
           <CardContent className="pt-6">
             <div className="flex gap-3">
-              <Button 
+              <Button
                 onClick={() => window.open(getVotingUrl(), '_blank')}
                 className="flex-1"
               >
                 Preview Voting Page
               </Button>
-              <Button 
+              <Button
                 variant="outline"
                 onClick={() => window.history.back()}
                 className="flex-1"
