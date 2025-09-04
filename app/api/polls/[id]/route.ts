@@ -32,18 +32,18 @@ export async function GET(request: NextRequest, { params }: PageProps) {
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
+
     // Check cache first (only for authenticated users)
     const now = Date.now();
     const cachedData = pollCache.get(cacheKey);
-    
+
     if (cachedData && (now - cachedData.timestamp) < CACHE_TTL * 1000) {
       // Verify user can access this poll
       if (user && cachedData.data.creator_id === user.id) {
         return NextResponse.json({ poll: cachedData.data });
       }
     }
-    
+
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -78,13 +78,13 @@ export async function GET(request: NextRequest, { params }: PageProps) {
       total_votes: totalVotes,
       poll_options: sortedOptions
     };
-    
+
     // Cache the result
     pollCache.set(cacheKey, {
       timestamp: now,
       data: pollWithOptions
     });
-    
+
     // Clean up old cache entries periodically
     if (Math.random() < 0.1) { // 10% chance to clean up on each request
       const expiryTime = now - (CACHE_TTL * 2 * 1000); // Double TTL for safety
@@ -122,7 +122,7 @@ export async function PUT(request: NextRequest, { params }: PageProps) {
 
     if (!validationResult.success) {
       return NextResponse.json(
-        { error: "Invalid input", details: validationResult.error.errors },
+        { error: "Invalid input", details: validationResult.error.issues },
         { status: 400 }
       );
     }
