@@ -141,7 +141,7 @@ npm run type-check   # Run TypeScript checks
 ### 🔧 **Architecture Highlights**
 - **Type Safety**: Full TypeScript strict mode
 - **Data Validation**: Zod schemas for API boundaries
-- **Security**: Row Level Security policies
+- **Security**: Row Level Security policies, CSRF protection, Rate limiting
 - **Performance**: Database triggers for real-time vote counting
 - **Code Quality**: ESLint 9 with strict rules
 
