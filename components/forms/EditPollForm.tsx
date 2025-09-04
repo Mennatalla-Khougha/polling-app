@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
-import { CreatePollRequest, PollWithOptions, ValidationError } from '@/lib/types';
+import { CreatePollRequest, ValidationError } from '@/lib/types';
+import { fetchWithCsrf } from '@/lib/csrf';
 
 interface EditPollFormProps {
   pollId: string;
@@ -45,7 +46,7 @@ export function EditPollForm({ pollId }: EditPollFormProps) {
         return;
       }
 
-      const response = await fetch(`/api/polls/${pollId}`);
+      const response = await fetchWithCsrf(`/api/polls/${pollId}`);
       if (!response.ok) {
         const result = await response.json();
         throw new Error(result.error || 'Failed to fetch poll data');
@@ -135,7 +136,7 @@ export function EditPollForm({ pollId }: EditPollFormProps) {
         options: options.filter(opt => opt.trim()).map(opt => opt.trim()),
       };
 
-      const response = await fetch(`/api/polls/${pollId}`, {
+      const response = await fetchWithCsrf(`/api/polls/${pollId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
