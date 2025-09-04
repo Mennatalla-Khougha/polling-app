@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 import { CreatePollRequest, CreatePollResponse, ValidationError } from '@/lib/types';
+import { fetchWithCsrf } from '@/lib/csrf';
 
 export function CreatePollForm() {
   const router = useRouter();
@@ -101,7 +102,7 @@ export function CreatePollForm() {
 
       console.log('Sending poll data:', JSON.stringify(pollData, null, 2));
 
-      const response = await fetch('/api/polls', {
+      const response = await fetchWithCsrf('/api/polls', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
