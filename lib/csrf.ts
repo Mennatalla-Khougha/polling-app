@@ -1,5 +1,13 @@
 /**
- * CSRF protection utilities for client-side components
+ * CSRF Protection Utilities
+ * 
+ * This module provides essential security functions that protect the application from
+ * Cross-Site Request Forgery (CSRF) attacks. CSRF attacks could otherwise allow malicious
+ * sites to perform actions on behalf of authenticated users without their knowledge.
+ * 
+ * These utilities work in conjunction with the middleware CSRF protection to create a
+ * complete defense system that verifies the authenticity of requests. Without this
+ * protection, authenticated users would be vulnerable to having their sessions hijacked.
  */
 
 /**

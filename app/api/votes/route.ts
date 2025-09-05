@@ -3,6 +3,48 @@ import { createClient } from "@/lib/supabase/server";
 import { voteSchema } from "@/lib/validations/polls";
 import { VoteResponse, UpdatedOption } from "@/lib/types";
 
+/**
+ * Votes API Route
+ * 
+ * This module provides the API endpoint for submitting votes on polls.
+ * It is a critical component of the application's core functionality,
+ * enabling users to participate in polls by casting their votes.
+ * 
+ * The implementation includes several important features:
+ * - Authentication verification to track user votes
+ * - Validation of vote data to ensure integrity
+ * - Prevention of duplicate voting
+ * - Support for both single-choice and multiple-choice polls
+ * - Performance optimization using database stored procedures when available
+ * - Fallback implementation for environments without stored procedures
+ * 
+ * The voting system is designed to be secure, preventing unauthorized votes
+ * while maintaining high performance even under load.
+ */
+
+/**
+ * POST /api/votes
+ * 
+ * Processes and records user votes on a poll.
+ * 
+ * This function is the core of the voting system, handling the submission of votes
+ * with several critical validations and optimizations:
+ * 
+ * 1. User authentication to track votes and prevent abuse
+ * 2. Validation of vote data against a schema
+ * 3. Verification of poll accessibility and expiration status
+ * 4. Prevention of duplicate votes from the same user
+ * 5. Enforcement of single-choice restriction when applicable
+ * 6. Optimized database operations using stored procedures when available
+ * 7. Fallback to separate queries when stored procedures aren't available
+ * 
+ * The implementation prioritizes both data integrity and performance, using
+ * database-level validations where possible to reduce round trips and ensure
+ * atomicity of operations.
+ * 
+ * @param {NextRequest} request - The incoming request with vote data
+ * @returns {Promise<NextResponse>} JSON response with updated vote counts or error
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();

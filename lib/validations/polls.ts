@@ -1,6 +1,30 @@
 import { z } from 'zod';
 
-// Poll creation validation schema
+/**
+ * Poll Validation Schemas
+ * 
+ * This module provides validation schemas for poll-related operations,
+ * ensuring data integrity and consistency throughout the application.
+ * 
+ * These schemas are critical for maintaining data quality and preventing
+ * invalid or malicious data from entering the system. They enforce
+ * business rules such as minimum option counts, title length requirements,
+ * and proper date formatting.
+ */
+
+/**
+ * Schema for validating poll creation and update requests
+ * 
+ * This schema enforces several important business rules:
+ * - Titles must be between 3-200 characters (balancing brevity and descriptiveness)
+ * - Descriptions are optional but limited to 1000 characters
+ * - Polls must have at least 2 options (for meaningful voting)
+ * - Each option must have text between 1-200 characters
+ * - Expiry dates must be in the future
+ * 
+ * These validations are essential for ensuring polls are usable and
+ * maintain a consistent user experience across the application.
+ */
 export const createPollSchema = z.object({
   title: z.string()
     .min(3, 'Title must be at least 3 characters')
@@ -30,7 +54,19 @@ export const createPollSchema = z.object({
     .max(10, 'Poll cannot have more than 10 options')
 });
 
-// Vote validation schema
+/**
+ * Schema for validating vote submissions
+ * 
+ * This schema ensures that votes contain the necessary data and follow the
+ * correct format before being processed by the system. It enforces:
+ * - Valid UUID format for poll and option identifiers
+ * - At least one option must be selected
+ * 
+ * This validation is critical for preventing malformed vote data and
+ * ensuring that all votes can be properly recorded and counted.
+ * It serves as the first line of defense against invalid or
+ * potentially malicious vote submissions.
+ */
 export const voteSchema = z.object({
   poll_id: z.string().uuid('Invalid poll ID'),
   option_ids: z.array(z.string().uuid('Invalid option ID'))

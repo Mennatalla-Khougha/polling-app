@@ -3,10 +3,41 @@ import { createClient } from "@/lib/supabase/server";
 import { createPollSchema } from "@/lib/validations/polls";
 import { CreatePollResponse, PollWithOptions } from "@/lib/types";
 
+/**
+ * Poll Management API Routes
+ * 
+ * This module provides the core API endpoints for managing polls, including:
+ * - Retrieving a user's polls with efficient caching
+ * - Creating new polls with validation
+ * 
+ * These endpoints are critical for the application as they handle the primary
+ * data operations that enable users to create and manage their polls. The implementation
+ * includes performance optimizations like caching and efficient database queries
+ * to ensure the application remains responsive even with many polls.
+ */
+
 // Cache poll listings for 30 seconds to reduce database load
 const CACHE_TTL = 30; // seconds
 const userPollsCache = new Map();
 
+/**
+ * GET /api/polls
+ * 
+ * Retrieves all polls created by the authenticated user with optimized caching.
+ * 
+ * This function is essential for the poll management dashboard, allowing users to view
+ * and manage their created polls. It implements several performance optimizations:
+ * 
+ * 1. In-memory caching with TTL to reduce database load
+ * 2. Selective column fetching to minimize data transfer
+ * 3. Periodic cache cleanup to prevent memory leaks
+ * 4. Pre-sorting of poll options to avoid client-side sorting
+ * 
+ * The caching mechanism is particularly important for users with many polls,
+ * as it significantly reduces database load and improves response times.
+ * 
+ * @returns {Promise<NextResponse>} JSON response with user's polls or error
+ */
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -85,6 +116,27 @@ export async function GET() {
   }
 }
 
+/**
+ * POST /api/polls
+ * 
+ * Creates a new poll with the provided details and options.
+ * 
+ * This function is critical to the core functionality of the application as it handles
+ * the creation of new polls. It performs several important tasks:
+ * 
+ * 1. Validates user authentication and creates a profile if needed
+ * 2. Validates the poll data against a schema to ensure data integrity
+ * 3. Creates the poll record in the database
+ * 4. Creates associated poll options with proper ordering
+ * 5. Handles error cases with appropriate cleanup
+ * 
+ * The function includes a transaction-like pattern where if option creation fails,
+ * the poll is deleted to maintain data consistency. This prevents orphaned polls
+ * without options.
+ * 
+ * @param {NextRequest} request - The incoming request with poll data
+ * @returns {Promise<NextResponse>} JSON response with created poll or error
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();

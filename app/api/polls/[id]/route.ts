@@ -3,6 +3,20 @@ import { createClient } from "@/lib/supabase/server";
 import { createPollSchema } from "@/lib/validations/polls";
 import { PollWithOptions, PollOption } from "@/lib/types";
 
+/**
+ * Poll Management API Routes for Individual Polls
+ * 
+ * This module provides the core API endpoints for managing individual polls by ID, including:
+ * - Retrieving a specific poll with efficient caching
+ * - Updating an existing poll with validation
+ * - Deleting a poll with proper authorization checks
+ * 
+ * These endpoints are critical for the poll management lifecycle, enabling users to
+ * view, modify, and remove their polls. The implementation includes performance
+ * optimizations and security checks to ensure only authorized users can access
+ * and modify their own polls.
+ */
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }
@@ -24,6 +38,27 @@ interface RawPollData {
 const CACHE_TTL = 10; // seconds
 const pollCache = new Map();
 
+/**
+ * GET /api/polls/[id]
+ * 
+ * Retrieves a specific poll by ID with efficient caching.
+ * 
+ * This function is essential for both the poll management interface and the voting
+ * interface, allowing users to view detailed information about a specific poll.
+ * It implements several important features:
+ * 
+ * 1. In-memory caching with TTL to reduce database load
+ * 2. Authorization checks to ensure only the poll creator can access it
+ * 3. Calculation of total votes for display
+ * 4. Pre-sorting of options by order_index for consistent display
+ * 
+ * The caching mechanism is particularly important for popular polls that may be
+ * accessed frequently, reducing database load and improving response times.
+ * 
+ * @param {NextRequest} request - The incoming request
+ * @param {PageProps} params - Contains the poll ID from the URL
+ * @returns {Promise<NextResponse>} JSON response with poll data or error
+ */
 export async function GET(request: NextRequest, { params }: PageProps) {
   try {
     const { id: pollId } = await params;
@@ -105,6 +140,28 @@ export async function GET(request: NextRequest, { params }: PageProps) {
   }
 }
 
+/**
+ * PUT /api/polls/[id]
+ * 
+ * Updates an existing poll with new details and options.
+ * 
+ * This function is critical for the poll management lifecycle, allowing users to
+ * modify their existing polls. It performs several important tasks:
+ * 
+ * 1. Validates user authentication and ownership of the poll
+ * 2. Validates the updated poll data against a schema
+ * 3. Updates the poll record in the database
+ * 4. Replaces all existing options with new ones (complete replacement pattern)
+ * 5. Handles error cases with appropriate responses
+ * 
+ * The complete replacement pattern for options (delete all, then create new)
+ * simplifies the update logic but resets vote counts. This is an intentional
+ * design decision to maintain data integrity when options change significantly.
+ * 
+ * @param {NextRequest} request - The incoming request with updated poll data
+ * @param {PageProps} params - Contains the poll ID from the URL
+ * @returns {Promise<NextResponse>} JSON response with updated poll or error
+ */
 export async function PUT(request: NextRequest, { params }: PageProps) {
   try {
     const { id: pollId } = await params;
@@ -203,6 +260,26 @@ export async function PUT(request: NextRequest, { params }: PageProps) {
   }
 }
 
+/**
+ * DELETE /api/polls/[id]
+ * 
+ * Deletes a specific poll by ID with authorization checks.
+ * 
+ * This function is essential for the poll management lifecycle, allowing users to
+ * remove polls they no longer need. It implements several important security features:
+ * 
+ * 1. Validates user authentication
+ * 2. Verifies poll ownership before allowing deletion
+ * 3. Uses database cascade deletion to remove related options and votes
+ * 
+ * The ownership verification is particularly important as a security measure to
+ * prevent unauthorized deletion of polls. The cascade deletion ensures that all
+ * related data is properly cleaned up, preventing orphaned records.
+ * 
+ * @param {NextRequest} request - The incoming request
+ * @param {PageProps} params - Contains the poll ID from the URL
+ * @returns {Promise<NextResponse>} JSON response indicating success or error
+ */
 export async function DELETE(request: NextRequest, { params }: PageProps) {
   try {
     const { id: pollId } = await params;
