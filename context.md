@@ -77,16 +77,20 @@ supabase/
 ### Data Model (Implemented)
 
 **Core Tables:**
+
 - `profiles`: id (UUID), email, display_name, created_at
+
   - ✅ Auto-created on signup with trigger
   - ✅ RLS policies for privacy
 
 - `polls`: id (UUID), title, description, creator_id, is_public, allow_multiple_votes, expires_at, created_at
+
   - ✅ Full CRUD operations
   - ✅ Public/private access control via RLS
   - ✅ Expiration date support
 
 - `poll_options`: id (UUID), poll_id, text, vote_count, created_at
+
   - ✅ Dynamic option management (2-10 options)
   - ✅ Vote counts maintained by triggers
   - ✅ Cascading deletes
@@ -97,6 +101,7 @@ supabase/
   - ✅ Trigger updates vote_count on poll_options
 
 **Implemented Constraints:**
+
 - Unique (poll_id, user_id) prevents duplicate votes per user
 - Check constraints on title/option length
 - Foreign key cascading for data integrity
@@ -105,21 +110,25 @@ supabase/
 ### API Surface (Implemented)
 
 **✅ Working Endpoints:**
+
 - `GET /api/polls` – List current user's polls with options
 - `POST /api/polls` – Create poll with validation and options
 - `GET /api/polls/[id]` – Fetch poll details (respects RLS)
 - `POST /api/votes` – Cast vote with duplicate prevention
 
 **🚧 Partially Implemented:**
+
 - `PUT /api/polls/[id]` – Update poll (basic structure exists)
 - `DELETE /api/polls/[id]` – Delete poll (RLS allows, UI pending)
 
 **⏳ Planned Endpoints:**
+
 - `GET /api/polls/[id]/results` – Aggregated results for analytics
 - `POST /api/polls/[id]/share` – Generate share tokens
-- `GET /api/qr/[id]` – QR code generation
+- ~~`GET /api/qr/[id]` – QR code generation~~ (handled client-side via `qrcode` library)
 
 **API Patterns (Established):**
+
 - All mutations: validate (Zod) → authenticate → authorize → execute → return typed response
 - Error handling with proper HTTP status codes and user-friendly messages
 - Request/Response DTOs with comprehensive TypeScript types
@@ -127,32 +136,39 @@ supabase/
 ### Core Flows (Current Status)
 
 **1. User Registration/Login ✅ COMPLETE**
+
 - Client: AuthForm → Supabase Auth
 - Server: Auto-create profile trigger
 - Result: Authenticated user with profile
 
 **2. Poll Creation ✅ COMPLETE**
+
 - Client: CreatePollForm with validation → API `POST /api/polls`
 - Server: Validate, auth check, create poll + options atomically
 - Result: Poll created, redirect to management view
 
 **3. Poll Voting ✅ COMPLETE**
+
 - Client: VotingInterface → API `POST /api/votes`
 - Server: Validate, check duplicates, insert vote, trigger updates counts
 - Result: Vote recorded, counts updated
 
 **4. Real-time Results 🚧 PARTIAL**
+
 - Database: Triggers maintain vote counts
 - Frontend: Basic count display working
 - Missing: Supabase real-time subscriptions for live updates
 
-**5. Poll Sharing 🚧 PARTIAL**
+**5. Poll Sharing ✅ UPDATED**
+
 - Public URLs work: `/polls/[id]` accessible
-- Missing: QR code generation, share tokens for private polls
+- Implemented: QR code generation (client-side), copy-to-clipboard
+- Missing: Share tokens for private polls
 
 ### Security Model (Implemented)
 
 **Authentication & Authorization ✅ COMPLETE:**
+
 - Supabase Auth JWT validation in API handlers and client
 - RLS policies enforce data access rules:
   - Users can only read/write their own polls
@@ -160,16 +176,19 @@ supabase/
   - Vote access controlled by poll visibility
 
 **Vote Integrity ✅ COMPLETE:**
+
 - Database unique constraints prevent duplicate votes
 - Server-side validation ensures data consistency
 - RLS policies prevent unauthorized vote manipulation
 
 **Input Validation ✅ COMPLETE:**
+
 - Zod schemas validate all API inputs
 - Client-side validation with user-friendly error messages
 - SQL injection prevention via Supabase client parameterized queries
 
 **Security Enhancements ✅ COMPLETE:**
+
 - Rate limiting for API endpoints implemented via middleware
 - CSRF protection for all form submissions and API endpoints
 - Additional audit logging (planned)
@@ -177,10 +196,12 @@ supabase/
 ### Real-time Strategy (Planned)
 
 **Current State:**
+
 - Vote counts updated via database triggers
 - UI shows current counts on page load/refresh
 
 **Planned Implementation:**
+
 - Supabase `postgres_changes` subscriptions on `votes` table
 - Client-side subscription management with useEffect hooks
 - Graceful fallback to polling if real-time connection fails
@@ -189,12 +210,14 @@ supabase/
 ### Development Status & Environment
 
 **✅ Development Setup Complete:**
+
 - `npm run dev` - Development server working
 - `npm run build` - Production build configured
 - `npm run lint` - ESLint 9 with Next.js rules
 - TypeScript strict mode enforcing type safety
 
 **✅ Environment Variables Configured:**
+
 ```
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
@@ -202,6 +225,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ```
 
 **Database Status:**
+
 - Supabase project configured and connected
 - Schema deployed with all tables, RLS, and triggers
 - Sample data for testing available
@@ -209,6 +233,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ### Current Capabilities vs. Planned Features
 
 **✅ Working Features:**
+
 - User registration and authentication
 - Poll creation with 2-10 options
 - Public and private poll settings
@@ -218,12 +243,14 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 - Form validation and error handling
 
 **🚧 Partially Working:**
+
 - Poll editing (structure exists, UI incomplete)
 - Real-time updates (database triggers work, subscriptions pending)
 - Mobile responsiveness (foundation solid, optimization needed)
 
 **⏳ Planned Features:**
-- QR code generation and scanning
+
+- QR code scanning
 - Advanced poll management (duplicate, delete, analytics)
 - Share tokens for private polls
 - Export functionality
@@ -233,6 +260,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ### Code Quality & Conventions (Established)
 
 **✅ Implemented Standards:**
+
 - TypeScript strict mode throughout
 - ESLint 9 with Next.js configuration
 - Consistent naming: kebab-case routes, camelCase TypeScript, snake_case database
@@ -241,6 +269,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 - Comprehensive error handling with user-friendly messages
 
 **File Organization:**
+
 - Route groups for logical UI separation
 - Components organized by function (forms, polls, layout, ui)
 - Lib folder for utilities, types, and integrations
@@ -249,17 +278,20 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ### Performance Considerations (Current)
 
 **✅ Implemented Optimizations:**
+
 - Database indexes on frequently queried columns
 - Denormalized vote counts via triggers (avoid expensive aggregations)
 - Server components for SEO and initial data loading
 - Client components only where interactivity needed
 
 **📊 Current Performance:**
+
 - App loads quickly in development
 - Database queries optimized with proper indexing
 - Image optimization via Next.js built-in features
 
 **⏳ Planned Optimizations:**
+
 - Bundle size analysis and optimization
 - Image optimization for QR codes
 - Caching strategy for frequently accessed polls
@@ -268,11 +300,13 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ### Testing Strategy (Planned)
 
 **Current State:**
+
 - Manual testing of all implemented features
 - TypeScript provides compile-time error checking
 - ESLint catches potential issues
 
 **Planned Testing:**
+
 - Unit tests for utility functions (Vitest)
 - Integration tests for API endpoints
 - Component testing for forms and interactions
@@ -281,12 +315,14 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ### Deployment Readiness
 
 **✅ Ready for Deployment:**
+
 - Next.js app configured for Vercel deployment
 - Environment variables documented
 - Database schema stable and tested
 - Core user flows working end-to-end
 
 **🔧 Pre-deployment Tasks:**
+
 - Complete real-time functionality
 - Add proper error boundaries
 - Implement rate limiting
@@ -295,12 +331,14 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ### Success Metrics (Current Achievement)
 
 **✅ Achieved:**
+
 - Users can create and vote on polls end-to-end
 - No critical bugs in core functionality
 - Professional UI/UX that works across devices
 - Secure authentication and data access
 
 **📊 Metrics to Track:**
+
 - Poll creation success rate (currently ~100% for valid inputs)
 - Voting completion rate
 - Real-time update latency (pending implementation)
@@ -325,17 +363,20 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ### Key Files for Understanding Implementation
 
 **Core Logic:**
+
 - `app/api/polls/route.ts` - Poll CRUD operations
 - `app/api/votes/route.ts` - Voting logic
 - `components/forms/CreatePollForm.tsx` - Poll creation UI
 - `components/polls/VotingInterface.tsx` - Voting experience
 
 **Configuration:**
+
 - `supabase/schema.sql` - Database structure and policies
 - `lib/types/index.ts` - TypeScript definitions
 - `lib/validations/polls.ts` - API validation schemas
 
 **Architecture:**
+
 - `lib/supabase/` - Database client configuration
 - `app/layout.tsx` - Global app structure
 - `lib/auth/AuthContext.tsx` - Authentication state management

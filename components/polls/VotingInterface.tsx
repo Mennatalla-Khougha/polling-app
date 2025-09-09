@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
 import { PollWithOptions, UpdatedOption } from '@/lib/types';
 import { RealtimeChannel, User } from '@supabase/supabase-js';
+import { QRCodeCard } from '@/components/polls/QRCodeCard';
 import { fetchWithCsrf } from '@/lib/csrf';
 
 interface VotingInterfaceProps {
@@ -264,6 +265,13 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
     return new Date(dateString).toLocaleString();
   };
 
+  const getPollUrl = () => {
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}/polls/${pollId}`;
+    }
+    return '';
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -325,6 +333,9 @@ export function VotingInterface({ pollId }: VotingInterfaceProps) {
             </CardDescription>
           </CardHeader>
         </Card>
+
+        {/* Optional: QR for easy sharing */}
+        <QRCodeCard title="Share this Poll" description="Scan to open this poll" value={getPollUrl()} size={200} />
 
         {/* Voting Interface */}
         {!hasVoted ? (

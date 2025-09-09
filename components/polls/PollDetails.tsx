@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { createClient } from '@/lib/supabase/client';
 import { PollWithOptions, PollOption } from '@/lib/types';
+import { QRCodeCard } from '@/components/polls/QRCodeCard';
 
 interface PollDetailsProps {
   pollId: string;
@@ -244,6 +245,7 @@ export function PollDetails({ pollId }: PollDetailsProps) {
                 </p>
               </CardContent>
             </Card>
+            <QRCodeCard value={getVotingUrl()} />
           </div>
 
           {/* Right Column - Results */}
